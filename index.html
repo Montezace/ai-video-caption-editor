@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Video Caption Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Style for the active caption */
+        .caption-item.active {
+            background-color: #e0e7ff; /* indigo-100 */
+            border-left-color: #4f46e5; /* indigo-600 */
+        }
+        /* Custom scrollbar */
+        #captions-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #captions-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        #captions-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        #captions-container::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .spinner {
+            animation: rotate 2s linear infinite;
+            width: 20px;
+            height: 20px;
+        }
+        .spinner .path {
+            stroke: currentColor;
+            stroke-linecap: round;
+            animation: dash 1.5s ease-in-out infinite;
+        }
+        @keyframes rotate {
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes dash {
+            0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
+            50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
+            100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4">
+        <header class="text-center mb-6">
+            <h1 class="text-4xl sm:text-5xl font-bold text-indigo-600">AI Video Caption Editor</h1>
+            <p class="text-lg text-gray-600 mt-2">Upload a video and let AI transcribe it for you.</p>
+        </header>
+
+        <main id="main-content" class="max-w-7xl mx-auto bg-white rounded-2xl shadow-lg p-6 hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Left Column: Video Player and Controls -->
+                <div class="space-y-4">
+                    <video id="video-player" class="w-full rounded-lg bg-black" controls></video>
+                    <div class="flex justify-end">
+                        <button id="download-vtt-btn" class="bg-indigo-600 text-white font-bold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center">
+                           <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Download .vtt File
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Right Column: Caption Editor -->
+                <div class="space-y-4">
+                    <h2 class="text-2xl font-semibold text-gray-700">Caption Editor</h2>
+                    <div id="captions-container" class="h-[60vh] overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                        <!-- Caption items will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Initial File Upload Screen -->
+        <div id="upload-screen" class="max-w-2xl mx-auto bg-white rounded-2xl shadow-lg p-8 text-center">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Get Started</h2>
+            <p id="upload-instructions" class="text-gray-600 mb-6">Upload your video to begin the transcription process.</p>
+            <div class="space-y-4">
+                 <div>
+                    <label for="video-upload" class="w-full inline-flex items-center justify-center px-4 py-3 bg-gray-200 text-gray-700 rounded-lg cursor-pointer hover:bg-gray-300 transition-colors font-semibold">
+                       <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                       <span id="video-upload-text">Upload Video</span>
+                    </label>
+                    <input id="video-upload" type="file" class="hidden" accept="video/*">
+                </div>
+                <button id="generate-captions-btn" class="w-full bg-indigo-600 text-white font-bold py-3 px-5 rounded-lg hover:bg-indigo-700 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center justify-center disabled:bg-indigo-400 disabled:cursor-not-allowed" disabled>
+                   <span id="generate-btn-text">Generate Captions</span>
+                   <svg id="generate-spinner" class="spinner ml-2 hidden" viewBox="0 0 50 50"><circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle></svg>
+                </button>
+            </div>
+             <div class="mt-6">
+                <p class="text-sm text-gray-500">Have your own subtitle file?</p>
+                <label for="vtt-upload" class="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer">
+                    Upload a .vtt file instead
+                </label>
+                <input id="vtt-upload" type="file" class="hidden" accept=".vtt">
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Suggestions Modal -->
+    <div id="ai-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl transform transition-all" id="ai-modal-content">
+            <div class="p-6">
+                <h3 class="text-2xl font-semibold text-gray-800 mb-4">AI Caption Suggestions</h3>
+                <p class="text-gray-600 mb-2"><strong>Original:</strong> <span id="original-caption-text"></span></p>
+                <div id="suggestions-loading" class="flex items-center justify-center py-10">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                    <p class="ml-4 text-gray-600">AI is thinking...</p>
+                </div>
+                <div id="suggestions-list" class="space-y-3 mt-4"></div>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 rounded-b-2xl flex justify-end">
+                <button id="close-modal-btn" class="bg-gray-200 text-gray-700 font-bold py-2 px-5 rounded-lg hover:bg-gray-300 transition">Close</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- DOM Element References ---
+        const videoUpload = document.getElementById('video-upload');
+        const vttUpload = document.getElementById('vtt-upload');
+        const generateCaptionsBtn = document.getElementById('generate-captions-btn');
+        const generateBtnText = document.getElementById('generate-btn-text');
+        const generateSpinner = document.getElementById('generate-spinner');
+        const videoPlayer = document.getElementById('video-player');
+        const captionsContainer = document.getElementById('captions-container');
+        const downloadVttBtn = document.getElementById('download-vtt-btn');
+        const uploadScreen = document.getElementById('upload-screen');
+        const mainContent = document.getElementById('main-content');
+        const videoUploadText = document.getElementById('video-upload-text');
+        const uploadInstructions = document.getElementById('upload-instructions');
+
+        // Modal elements
+        const aiModal = document.getElementById('ai-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const originalCaptionText = document.getElementById('original-caption-text');
+        const suggestionsList = document.getElementById('suggestions-list');
+        const suggestionsLoading = document.getElementById('suggestions-loading');
+
+        let captions = []; // Array to hold parsed caption objects { index, start, end, text }
+        let videoFile = null;
+
+        // --- Event Listeners ---
+
+        videoUpload.addEventListener('change', handleVideoUpload);
+        vttUpload.addEventListener('change', handleVttUpload);
+        generateCaptionsBtn.addEventListener('click', handleAutoCaptioning);
+        videoPlayer.addEventListener('timeupdate', syncCaptionsToVideo);
+        downloadVttBtn.addEventListener('click', downloadVttFile);
+        closeModalBtn.addEventListener('click', () => aiModal.classList.add('hidden'));
+        aiModal.addEventListener('click', (e) => {
+            if (e.target === aiModal) aiModal.classList.add('hidden');
+        });
+
+        // --- Main Functions ---
+
+        /**
+         * Handles the selection of a video file.
+         */
+        function handleVideoUpload(e) {
+            videoFile = e.target.files[0];
+            if (videoFile) {
+                videoUploadText.textContent = Video: ${videoFile.name};
+                document.querySelector('label[for="video-upload"]').classList.add('bg-green-200', 'text-black');
+                generateCaptionsBtn.disabled = false;
+                
+                // Load video to get duration, but keep it hidden
+                const tempVideoUrl = URL.createObjectURL(videoFile);
+                videoPlayer.src = tempVideoUrl;
+            }
+        }
+        
+        /**
+         * Handles the selection of a VTT file, bypassing auto-generation.
+         */
+        function handleVttUpload(e) {
+            const vttFile = e.target.files[0];
+            if (!videoFile) {
+                alert("Please upload a video file first.");
+                return;
+            }
+            if(vttFile) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    initializeEditor(ev.target.result);
+                };
+                reader.readAsText(vttFile);
+            }
+        }
+        
+        /**
+         * Initializes the main editor UI with video and parsed captions.
+         * @param {string} vttContent - The raw string content of the .vtt file.
+         */
+        function initializeEditor(vttContent) {
+            videoPlayer.src = URL.createObjectURL(videoFile);
+            captions = parseVTT(vttContent);
+            renderCaptions();
+            uploadScreen.classList.add('hidden');
+            mainContent.classList.remove('hidden');
+        }
+
+        /**
+         * Triggers the AI to generate captions for the uploaded video.
+         */
+        async function handleAutoCaptioning() {
+            setLoadingState(true, 'Transcribing...');
+            
+            // Note: In a real-world scenario, you would use a dedicated Speech-to-Text API.
+            // Here, we simulate this by asking Gemini to generate plausible VTT content.
+            const videoDuration = Math.round(videoPlayer.duration);
+            if (!videoDuration || videoDuration === 0) {
+                 alert("Could not determine video duration. Please try a different video file.");
+                 setLoadingState(false);
+                 return;
+            }
+
+            const prompt = Act as a professional transcriptionist creating captions for a short nature documentary segment. The video is ${videoDuration} seconds long. Create a realistic, engaging, and varied monologue in WebVTT (.vtt) format. The captions should flow naturally, with realistic pauses and sentence structures. For example, the narration could describe an animal's behavior or a beautiful landscape. Do not include any explanation, just the raw VTT content starting with 'WEBVTT'.;
+            
+            try {
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: prompt }] }]
+                };
+                const apiKey = ""; // Provided by environment
+                const apiUrl = https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey};
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(API error: ${response.statusText});
+
+                const result = await response.json();
+                const vttContent = result.candidates[0].content.parts[0].text;
+                
+                // Clean up potential markdown formatting from the AI response
+                const cleanedVtt = vttContent.replace(/
+vtt\n/g, '').replace(/
+/g, '');
+                
+                initializeEditor(cleanedVtt);
+
+            } catch (error) {
+                console.error("Auto-captioning error:", error);
+                uploadInstructions.textContent = Failed to generate captions: ${error.message};
+                uploadInstructions.classList.add('text-red-600');
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        /**
+         * Renders the editable caption items in the UI.
+         */
+        function renderCaptions() {
+            captionsContainer.innerHTML = '';
+            captions.forEach(caption => {
+                const item = document.createElement('div');
+                item.className = 'caption-item p-3 border-l-4 border-gray-300 bg-white shadow-sm rounded-r-lg flex items-start gap-3 transition-colors';
+                item.dataset.index = caption.index;
+
+                const textInput = document.createElement('textarea');
+                textInput.className = 'flex-grow p-2 bg-transparent rounded-md focus:bg-white focus:ring-2 focus:ring-indigo-400 resize-none';
+                textInput.value = caption.text;
+                textInput.rows = Math.max(1, caption.text.split('\n').length);
+                textInput.addEventListener('input', (e) => {
+                    caption.text = e.target.value;
+                    e.target.rows = Math.max(1, e.target.value.split('\n').length);
+                });
+
+                const timeEl = document.createElement('div');
+                timeEl.className = 'text-sm font-mono text-gray-500 pt-1 cursor-pointer';
+                timeEl.textContent = ${secondsToTimeString(caption.start)} --> ${secondsToTimeString(caption.end)};
+                timeEl.title = "Click to jump to this time";
+                timeEl.onclick = () => { videoPlayer.currentTime = caption.start; };
+
+                const aiButton = document.createElement('button');
+                aiButton.className = 'p-2 rounded-full hover:bg-indigo-100 text-indigo-600 transition-colors shrink-0';
+                aiButton.innerHTML = <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m12.728 0l.707-.707M6.343 17.657l.707.707m12.728 0l-.707.707M12 21v-1m0-16a9 9 0 110 18 9 9 0 010-18z"></path></svg><span class="sr-only">AI Edit</span>;
+                aiButton.title = "AI Edit Caption";
+                aiButton.addEventListener('click', () => openAiModal(caption));
+                
+                const wrapper = document.createElement('div');
+                wrapper.className = 'flex-grow flex flex-col'
+                wrapper.appendChild(textInput);
+                wrapper.appendChild(timeEl);
+
+                item.appendChild(wrapper);
+                item.appendChild(aiButton);
+                captionsContainer.appendChild(item);
+            });
+        }
+        
+        /**
+         * Highlights the active caption in the list based on video time.
+         */
+        function syncCaptionsToVideo() {
+            const currentTime = videoPlayer.currentTime;
+            let activeCaption = captions.find(c => currentTime >= c.start && currentTime <= c.end);
+            
+            document.querySelectorAll('.caption-item').forEach(el => el.classList.remove('active'));
+
+            if (activeCaption) {
+                const activeEl = document.querySelector(.caption-item[data-index='${activeCaption.index}']);
+                if (activeEl && !activeEl.classList.contains('active')) {
+                     activeEl.classList.add('active');
+                     activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }
+        
+        /**
+         * Generates and triggers the download of the edited .vtt file.
+         */
+        function downloadVttFile() {
+            let content = "WEBVTT\n\n";
+            captions.forEach((caption, index) => {
+                content += ${index + 1}\n;
+                content += ${secondsToTimeString(caption.start)} --> ${secondsToTimeString(caption.end)}\n;
+                content += ${caption.text}\n\n;
+            });
+
+            const blob = new Blob([content], { type: 'text/vtt' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'edited_captions.vtt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // --- AI Modal & Helpers ---
+
+        async function openAiModal(caption) {
+            // (Function content is the same as previous version, no changes needed)
+            originalCaptionText.textContent = caption.text;
+            suggestionsList.innerHTML = '';
+            aiModal.classList.remove('hidden');
+            suggestionsLoading.classList.remove('hidden');
+            
+            const prompt = Rephrase the following video caption to be more clear, concise, or engaging. Provide 3 alternatives. Original caption: "${caption.text}";
+            
+            try {
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                    generationConfig: {
+                         responseMimeType: "application/json",
+                         responseSchema: {
+                           type: "OBJECT",
+                           properties: { "suggestions": { "type": "ARRAY", "items": { "type": "STRING" } } }
+                         }
+                    }
+                };
+                const apiKey = ""; // Provided by environment
+                const apiUrl = https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey};
+                
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(API error: ${response.statusText});
+
+                const result = await response.json();
+                const jsonString = result.candidates[0].content.parts[0].text;
+                const parsedJson = JSON.parse(jsonString);
+                
+                suggestionsList.innerHTML = '';
+                parsedJson.suggestions.forEach(suggestionText => {
+                    const item = document.createElement('div');
+                    item.className = 'p-3 bg-gray-50 rounded-lg flex justify-between items-center';
+                    item.innerHTML = <p class="text-gray-800">${suggestionText}</p>;
+                    const useBtn = document.createElement('button');
+                    useBtn.className = 'bg-indigo-500 text-white font-semibold py-1 px-3 rounded-md hover:bg-indigo-600 transition text-sm shrink-0 ml-4';
+                    useBtn.textContent = 'Use';
+                    useBtn.onclick = () => {
+                        caption.text = suggestionText;
+                        renderCaptions(); 
+                        aiModal.classList.add('hidden');
+                    };
+                    item.appendChild(useBtn);
+                    suggestionsList.appendChild(item);
+                });
+
+            } catch (error) {
+                console.error("AI suggestion error:", error);
+                suggestionsList.innerHTML = <p class="text-red-600">Could not get suggestions. ${error.message}</p>;
+            } finally {
+                suggestionsLoading.classList.add('hidden');
+            }
+        }
+
+        function setLoadingState(isLoading, text = 'Generate Captions') {
+            generateBtnText.textContent = text;
+            generateCaptionsBtn.disabled = isLoading;
+            if (isLoading) {
+                generateSpinner.classList.remove('hidden');
+            } else {
+                generateSpinner.classList.add('hidden');
+                generateBtnText.textContent = 'Generate Captions';
+            }
+        }
+        
+        // --- VTT Parsing & Time Conversion Utilities ---
+        
+        function parseVTT(vttContent) {
+            const lines = vttContent.trim().replace(/\r/g, '').split('\n');
+            const parsedCaptions = [];
+            let i = 0;
+            while (i < lines.length && (lines[i].trim().toUpperCase() !== 'WEBVTT' || lines[i].trim() === '')) { i++; }
+            i++; 
+
+            let index = 1;
+            while (i < lines.length) {
+                if (lines[i].trim() === '') { i++; continue; }
+                
+                let idLine = '';
+                if (!lines[i].includes('-->')) { idLine = lines[i]; i++; }
+
+                const timeLine = lines[i];
+                if (!timeLine || !timeLine.includes('-->')) { i++; continue; }
+
+                const [startStr, endStr] = timeLine.split(' --> ');
+                const start = timeStringToSeconds(startStr.trim());
+                const end = timeStringToSeconds(endStr.trim().split(' ')[0]); // Handle settings like 'align:start'
+                i++;
+                
+                let text = '';
+                while (i < lines.length && lines[i] && lines[i].trim() !== '') {
+                    text += (text ? '\n' : '') + lines[i].trim();
+                    i++;
+                }
+
+                if(text) { parsedCaptions.push({ index: index++, start, end, text }); }
+                i++;
+            }
+            return parsedCaptions;
+        }
+
+        function timeStringToSeconds(timeStr) {
+            const parts = timeStr.split(':');
+            const secondsAndMillis = parts.length > 0 ? parts.pop().split('.') : ['0', '0'];
+            const hours = parts.length > 1 ? parseInt(parts.shift(), 10) : 0;
+            const minutes = parts.length > 0 ? parseInt(parts.shift(), 10) : 0;
+            const seconds = parseInt(secondsAndMillis[0], 10);
+            const milliseconds = parseInt(secondsAndMillis[1] || '0', 10);
+            return (hours * 3600) + (minutes * 60) + seconds + (milliseconds / 1000);
+        }
+
+        function secondsToTimeString(timeInSeconds) {
+            const hours = Math.floor(timeInSeconds / 3600).toString().padStart(2, '0');
+            const minutes = Math.floor((timeInSeconds % 3600) / 60).toString().padStart(2, '0');
+            const seconds = Math.floor(timeInSeconds % 60).toString().padStart(2, '0');
+            const milliseconds = Math.round((timeInSeconds - Math.floor(timeInSeconds)) * 1000).toString().padStart(3, '0');
+            return ${hours}:${minutes}:${seconds}.${milliseconds};
+        }
+    </script>
+</body>
+</html>
