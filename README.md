@@ -9,7 +9,7 @@ A lightweight, front-end project to upload a video, auto-generate or upload capt
 - Import `.vtt` subtitle files or auto-generate captions (placeholder AI call in code).
 - Edit captions inline with a smooth, scrollable interface.
 - Download edited captions as a `.vtt` file.
-- AI-powered caption suggestions (placeholder for real API integration).
+- AI-powered caption suggestions
 
 ---
 
